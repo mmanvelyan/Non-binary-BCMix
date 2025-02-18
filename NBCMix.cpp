@@ -14,12 +14,9 @@ using namespace std;
 uint16_t maxCode;
 int checkSize = 10;
 uint64_t bestFullBitsSz = -1;
-uint8_t bestDigitsSz[MAX_DIGITS];
 uint8_t bestDigitsSt[MAX_DIGITS];
-uint8_t shortestDigitLen = 2;
-uint8_t minSt[MAX_DIGITS] = {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
-uint8_t maxSt[MAX_DIGITS] = {5, 5, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
-uint8_t longestDigitLen[MAX_DIGITS] = {4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
+uint8_t minSt[MAX_DIGITS] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
+uint8_t maxSt[MAX_DIGITS] = {8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
 uint32_t PSum[CODE_MAX];
 uint32_t cnt[CODE_MAX];
 int32_t idx = 0;
@@ -36,27 +33,23 @@ uint64_t pows[MAX_DIGITS];
 uint64_t pref[MAX_DIGITS];
 
 
-int getBitCount(uint16_t cur, uint8_t dSz[MAX_DIGITS], uint8_t dSt[MAX_DIGITS]){
+int getBitCount(uint16_t cur, uint8_t dSt[MAX_DIGITS]){
     int res = 0;
     for (int j = 0; j < 24; j++) {
         uint16_t st = dSt[j];
-        uint16_t sz = dSz[j];
-        uint64_t maskj = pow(st, sz)-1;
+        uint64_t maskj = st-1;
         int l = ceil(log2(st));
         int x = (1 << l) - st;
         int y = st - x;
         if (cur == 0) {
-            res += sz * l;
+            res += l;
             break;
         } else {
-            uint16_t cur1 = (cur-1)%maskj;  //next digit
-            for (int i = 0; i < sz; i++) {
-                if (cur1%st < x){
-                    res += l-1;
-                } else {
-                    res += l;
-                }
-                cur1 /= st;
+            uint16_t cur1 = (cur-1)%maskj;
+            if (cur1%st < x){
+                res += l-1;
+            } else {
+                res += l;
             }
             cur = (cur-1)/maskj;
         }
@@ -77,7 +70,7 @@ void encAdd(uint16_t bit) {
 
 //converting a (st)-ary number cur to a binary representation
 void encode(int cur, int st) {
-    //if (fileIdx < checkSize) cout << cur << endl;
+    if (fileIdx < checkSize) cout << cur;
     int l = ceil(log2(st));
     int x = (1 << l) - st;
     uint16_t f;
@@ -94,27 +87,11 @@ void encode(int cur, int st) {
     }
 }
 
-//Encode number (cur) to BCMix digit of size (sz) in base (st)
-void encodeSt(uint16_t cur, uint16_t st, uint16_t sz) {
-    //if (fileIdx < checkSize) cout << "cur : " << cur << endl;
-    uint16_t enc[10];
-    for (int i = 0; i < sz; i++) {
-        enc[sz-i-1] = cur%st;
-        cur /= st;
-    }
-    for (int i = 0; i < sz; i++){
-        if (fileIdx < checkSize) cout << (int)enc[i];
-        encode(enc[i], st);
-    }
-    if (fileIdx < checkSize) cout << " ";
-}
-
 //encode file to encoded bitstream
 void encodeFile() {
     //encoded = new uint16_t[minEncodedSize+100];
-    for (int i = 0; i < 5; i++){
-        encoded[i] = bestDigitsSz[i];
-        encoded[i+5] = bestDigitsSt[i];
+    for (int i = 0; i < 10; i++){
+        encoded[i] = bestDigitsSt[i];
     }
     idx += 10;
     encodedSize += 10;
@@ -123,15 +100,15 @@ void encodeFile() {
         uint16_t cur = file[fileIdx];
         for (int j = 0; j < 24; j++) {
             uint16_t st = bestDigitsSt[j];
-            uint16_t sz = bestDigitsSz[j];
             if (cur == 0) {
-                encodeSt(mask[j], st, sz);  //delimiter
+                encode(mask[j], st);  //delimiter
                 break;
             } else {
-                encodeSt((cur-1)%mask[j], st, sz); //next digit
+                encode((cur-1)%mask[j], st); //next digit
                 cur = (cur-1)/mask[j];
             }
         }
+        if (fileIdx < checkSize) cout << " ";
     }
     cout << endl;
 }
@@ -148,15 +125,14 @@ uint64_t getSum(uint32_t l, uint32_t r)
 
 
 //best code search finds the best digit sizes and best bases for digits
-void BCS(uint8_t dSz[24], uint8_t dSt[24], uint32_t dN)
+void BCS(uint8_t dSt[24], uint32_t dN)
 {
-    if (dN >= 3) {
-        dSz[dN] = 2;
-        dSt[dN] = 2;
+    if (dN >= 4) {
+        dSt[dN] = 3;
         uint64_t fullSz = 0;
         for (int i = 0; i <= maxCode; i++) {
             if (getSum(i, i) != 0) {
-                fullSz += getBitCount(i, dSz, dSt)*cnt[i];
+                fullSz += getBitCount(i, dSt)*cnt[i];
             }
         }
         if (fullSz < bestFullBitsSz || bestFullBitsSz == -1)
@@ -164,18 +140,14 @@ void BCS(uint8_t dSz[24], uint8_t dSt[24], uint32_t dN)
             bestFullBitsSz = fullSz;
             for (uint32_t i = 0; i < 24; i++)
             {
-                bestDigitsSz[i] = dSz[i];
                 bestDigitsSt[i] = dSt[i];
             }
         }
         return;
     }
-    for(int i=shortestDigitLen;i<=longestDigitLen[dN];i++) {
-        for (int j = minSt[dN]; j <= maxSt[dN]; j++) {
-            dSz[dN] = i;
-            dSt[dN] = j;
-            BCS(dSz, dSt, dN + 1);
-        }
+    for (int j = minSt[dN]; j <= maxSt[dN]; j++) {
+        dSt[dN] = j;
+        BCS(dSt, dN + 1);
     }
 }
 
@@ -191,18 +163,15 @@ void preCalc() {
     for (int i = 1; i <= maxCode; i++) {
         PSum[i] += PSum[i-1];
     }
-    uint8_t digitLen[24];
-    memset(digitLen, 2, sizeof(uint8_t) * 24);
     uint8_t digitSt[24];
-    memset(digitSt, 2, sizeof(uint8_t) * 24);
+    memset(digitSt, 3, sizeof(uint8_t) * 24);
     for (int i = 0; i < 24; i++) {
-        bestDigitsSt[i] = 2;
-        bestDigitsSz[i] = 2;
+        bestDigitsSt[i] = 3;
     }
-    BCS(digitLen, digitSt, 0);
+    BCS(digitSt, 0);
 
     for (int i = 0; i < 24; i++) {
-        mask[i] = (uint32_t)pow(bestDigitsSt[i], bestDigitsSz[i])-1;
+        mask[i] = (uint32_t)bestDigitsSt[i]-1;
     }
 }
 
@@ -253,24 +222,17 @@ void decodeFile() {
         //decode next BCMix digit
         for (int j = 0; j < 24; j++) {
             uint16_t st = bestDigitsSt[j];
-            uint16_t sz = bestDigitsSz[j];
 
-            uint16_t val = 0;
-
-            for (int k = 0; k < sz; k++) {
-                uint16_t f = decode(st);
-                val *= st;
-                val += f;
-            }
+            uint16_t f = decode(st);
             //if (decodedSize < checkSize) cout << "val: " << val << endl;
 
             //end of number
-            if (val == mask[j]) {
+            if (f == mask[j]) {
                 cur += pref[j];
                 //if (decodedSize < 10) cout << "Add : " << pref[j] << endl;
                 break;
             }
-            cur += val*pows[j];
+            cur += f*pows[j];
             //if (decodedSize < 10) cout << "Add : " <<  val*pows[j] << endl;
         }
 
@@ -299,7 +261,7 @@ void check() {
 
 int main() {
 
-    FILE* in = fopen("resources/data04", "rb");
+    FILE* in = fopen("resources/data01", "rb");
 
     fseek(in, 0, SEEK_END);
     fileSize = ftell(in) / sizeof(uint16_t);
@@ -317,11 +279,6 @@ int main() {
 
     preCalc();
 
-    cout << "Digit size : ";
-    for (int i = 0; i < 24; i++) {
-        cout << (int)bestDigitsSz[i] << " ";
-    }
-    cout << endl;
     cout << "Digit base : ";
     for (int i = 0; i < 24; i++) {
         cout << (int)bestDigitsSt[i] << " ";
@@ -391,16 +348,7 @@ int main() {
     return 0;
 }
 
-
-/*
-File sizes (in bytes):
-Before -> After encoding
-
-13,816,036 -> 8,017,510
-1,858 -> 422
-20,000 -> 17,200
-4,210,664 -> 4,492,434
-2,915,710 -> 2,016,200
+/*data04 : 21717260
+ *data03 : 309504
+ *data01 : 320824
 */
-
-
