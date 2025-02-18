@@ -32,31 +32,6 @@ uint64_t mask[MAX_DIGITS];
 uint64_t pows[MAX_DIGITS];
 uint64_t pref[MAX_DIGITS];
 
-
-int getBitCount(uint16_t cur, uint8_t dSt[MAX_DIGITS]){
-    int res = 0;
-    for (int j = 0; j < 24; j++) {
-        uint16_t st = dSt[j];
-        uint64_t maskj = st-1;
-        int l = ceil(log2(st));
-        int x = (1 << l) - st;
-        int y = st - x;
-        if (cur == 0) {
-            res += l;
-            break;
-        } else {
-            uint16_t cur1 = (cur-1)%maskj;
-            if (cur1%st < x){
-                res += l-1;
-            } else {
-                res += l;
-            }
-            cur = (cur-1)/maskj;
-        }
-    }
-    return res;
-}
-
 //adding bit to the encoded bitstream
 void encAdd(uint16_t bit) {
     encoded[idx] |= (bit << (15-bits));
@@ -125,30 +100,36 @@ uint64_t getSum(uint32_t l, uint32_t r)
 
 
 //best code search finds the best digit sizes and best bases for digits
-void BCS(uint8_t dSt[24], uint32_t dN)
+void BCS(uint8_t dSt[24], uint32_t dN, uint64_t fullN,
+    uint64_t incN, double cLen, uint64_t fullSz)
 {
-    if (dN >= 4) {
-        dSt[dN] = 3;
-        uint64_t fullSz = 0;
-        for (int i = 0; i <= maxCode; i++) {
-            if (getSum(i, i) != 0) {
-                fullSz += getBitCount(i, dSt)*cnt[i];
-            }
-        }
-        if (fullSz < bestFullBitsSz || bestFullBitsSz == -1)
+    if (dN > 6) // all digits starting from 5th = 2
+    {
+        if (fullN > maxCode)
         {
-            bestFullBitsSz = fullSz;
-            for (uint32_t i = 0; i < 24; i++)
+            dSt[dN] = 3;
+
+            if (fullSz < bestFullBitsSz)
             {
-                bestDigitsSt[i] = dSt[i];
+                bestFullBitsSz = fullSz;
+                for (uint32_t i = 0; i < 24; i++)
+                {
+                    bestDigitsSt[i] = dSt[i];
+                }
             }
+            return;
         }
-        return;
+
+        dSt[dN] = 3;
+        uint64_t newSz = fullSz + (cLen + log2(3)) * getSum(fullN, fullN + incN - 1);
+        BCS(dSt, dN + 1, fullN + incN, incN * 2, cLen + 2, newSz);
     }
-    for (int j = minSt[dN]; j <= maxSt[dN]; j++) {
-        dSt[dN] = j;
-        BCS(dSt, dN + 1);
-    }
+    else // lines 4-7 from Alg. 3 i the paper
+        for(int i = minSt[dN]; i <= maxSt[dN]; i++) {
+            dSt[dN] = i;
+            uint64_t newSz = fullSz + (cLen + log2(i)) * getSum(fullN, fullN + incN - 1);
+            BCS(dSt, dN + 1, fullN + incN, incN * (i-1), cLen + log2(i), newSz);
+        }
 }
 
 //calculate prefix sums for BCS and masks of received from BCS digits
@@ -168,7 +149,7 @@ void preCalc() {
     for (int i = 0; i < 24; i++) {
         bestDigitsSt[i] = 3;
     }
-    BCS(digitSt, 0);
+    BCS(digitSt, 0, 0, 1, 0, 0);
 
     for (int i = 0; i < 24; i++) {
         mask[i] = (uint32_t)bestDigitsSt[i]-1;
@@ -261,7 +242,7 @@ void check() {
 
 int main() {
 
-    FILE* in = fopen("resources/data01", "rb");
+    FILE* in = fopen("resources/data04", "rb");
 
     fseek(in, 0, SEEK_END);
     fileSize = ftell(in) / sizeof(uint16_t);
@@ -348,7 +329,7 @@ int main() {
     return 0;
 }
 
-/*data04 : 21717260
- *data03 : 309504
- *data01 : 320824
+/*data04 : 21717260 |   21717260
+ *data03 : 309504   |   309504
+ *data01 : 320824   |   323002
 */
