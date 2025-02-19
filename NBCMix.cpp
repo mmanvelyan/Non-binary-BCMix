@@ -2,10 +2,36 @@
 
 #include <iostream>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 
 using namespace std;
+
+class Timer
+{
+private:
+    using clock_t = std::chrono::high_resolution_clock;
+    using second_t = std::chrono::duration<double, std::ratio<1> >;
+
+    std::chrono::time_point<clock_t> m_beg;
+
+public:
+    Timer() : m_beg(clock_t::now())
+    {
+    }
+
+    void reset()
+    {
+        m_beg = clock_t::now();
+    }
+
+    double elapsed() const
+    {
+        return std::chrono::duration_cast<second_t>(clock_t::now() - m_beg).count();
+    }
+};
+
 
 #define MAX_CODES 100000000
 #define CODE_MAX 66000
@@ -234,7 +260,7 @@ void check() {
         }
     }
     if (diff) {
-        cout << "Falied" << endl;
+        cout << "Failed" << endl;
     } else {
         cout << "Ok" << endl;
     }
@@ -242,20 +268,13 @@ void check() {
 
 int main() {
 
-    FILE* in = fopen("resources/data04", "rb");
+    FILE* in = fopen("resources/data10", "rb");
 
     fseek(in, 0, SEEK_END);
     fileSize = ftell(in) / sizeof(uint16_t);
     fseek(in, 0, SEEK_SET);
     fread(file, sizeof(uint16_t), fileSize, in);
-/*
-    if (true){
-        fileSize = 10;
-        for (int i = 0; i < 10; i++){
-            file[i] = i;
-        }
-    }
-*/
+
     fclose(in);
 
     preCalc();
@@ -281,15 +300,11 @@ int main() {
     }
     cout << endl;
 
-
-    /*
-    for (int i = 0; i < 10; i++) {
-        cout << pows[i] << " " << pref[i] << " " << mask[i] << endl;
-    }
-    */
+    Timer t1;
 
     encodeFile();
 
+    cout << "Encode time: " << t1.elapsed() << endl;
 
 
     cout << "Encoded file: ";
@@ -300,7 +315,11 @@ int main() {
     }
     cout << endl;
 
+    Timer t2;
+
     decodeFile();
+
+    cout << "Decode time: " << t2.elapsed() << endl;
 
     cout << "Decoded file: ";
     for (uint32_t i = 0; i < checkSize; i++) {
@@ -316,20 +335,8 @@ int main() {
 
     FILE* out = fopen("decoded", "wb");
     fwrite(decoded, sizeof(uint16_t), decodedSize, out);
-    /*
-        if (true){
-            fileSize = 10;
-            for (int i = 0; i < 10; i++){
-                file[i] = i;
-            }
-        }
-    */
+
     fclose(out);
 
     return 0;
 }
-
-/*data04 : 21717260 |   21717260
- *data03 : 309504   |   309504
- *data01 : 320824   |   323002
-*/
