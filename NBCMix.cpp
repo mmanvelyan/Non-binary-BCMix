@@ -277,7 +277,9 @@ int main() {
 
     fclose(in);
 
+    Timer t0;
     preCalc();
+    cout << "PreCalc time : " << t0.elapsed() << endl;
 
     cout << "Digit base : ";
     for (int i = 0; i < 24; i++) {
