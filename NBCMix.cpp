@@ -34,35 +34,33 @@ public:
 
 
 #define MAX_CODES 100000000
-#define CODE_MAX 66000
-#define MAX_DIGITS 24
+#define MAX_DIGITS 48
 
-uint16_t maxCode;
+uint32_t maxCode;
 int checkSize = 10;
-uint64_t bestFullBitsSz = -1;
+uint64_t bestFullBitsSz = 10000000000000000000ull;
 uint8_t bestDigitsSt[MAX_DIGITS];
-uint8_t minSt[MAX_DIGITS] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
-uint8_t maxSt[MAX_DIGITS] = {8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
-uint32_t PSum[CODE_MAX];
-uint32_t cnt[CODE_MAX];
+uint8_t minSt[MAX_DIGITS] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
+uint8_t maxSt[MAX_DIGITS] = {8, 8, 8, 8, 8, 8, 4, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
+uint64_t* PSum;
 int32_t idx = 0;
 int32_t bits = 0;
-uint16_t encoded[MAX_CODES];
+uint32_t encoded[MAX_CODES];
 uint32_t encodedSize = 1;
 uint32_t fileIdx = 0;
-uint16_t decoded[MAX_CODES];
+uint32_t decoded[MAX_CODES];
 uint32_t decodedSize = 0;
-uint16_t file[MAX_CODES];
+uint32_t file[MAX_CODES];
 uint32_t fileSize;
 uint64_t mask[MAX_DIGITS];
 uint64_t pows[MAX_DIGITS];
 uint64_t pref[MAX_DIGITS];
 
 //adding bit to the encoded bitstream
-void encAdd(uint16_t bit) {
-    encoded[idx] |= (bit << (15-bits));
+void encAdd(uint32_t bit) {
+    encoded[idx] |= (bit << (31-bits));
     bits++;
-    if (bits == 16) {
+    if (bits == 32) {
         bits = 0;
         idx++;
         encodedSize++;
@@ -70,17 +68,17 @@ void encAdd(uint16_t bit) {
 }
 
 //converting a (st)-ary number cur to a binary representation
-void encode(int cur, int st) {
+void encode(uint32_t cur, uint32_t st) {
     if (fileIdx < checkSize) cout << cur;
-    int l = ceil(log2(st));
-    int x = (1 << l) - st;
-    uint16_t f;
+    uint32_t l = ceil(log2(st));
+    uint32_t x = (1 << l) - st;
+    uint32_t f;
     if (cur < x) {
         f = cur;
     } else {
         f = x + (cur-x)/2;
     }
-    for (int i = 0; i < l-1; i++) {
+    for (uint32_t i = 0; i < l-1; i++) {
         encAdd((f>>(l-2-i))&1);
     }
     if (cur >= x) {
@@ -91,16 +89,16 @@ void encode(int cur, int st) {
 //encode file to encoded bitstream
 void encodeFile() {
     //encoded = new uint16_t[minEncodedSize+100];
-    for (int i = 0; i < 10; i++){
+    for (uint32_t i = 0; i < 10; i++){
         encoded[i] = bestDigitsSt[i];
     }
     idx += 10;
     encodedSize += 10;
     cout << "Codes :       ";
     for (fileIdx = 0; fileIdx < fileSize; fileIdx++) {
-        uint16_t cur = file[fileIdx];
-        for (int j = 0; j < 24; j++) {
-            uint16_t st = bestDigitsSt[j];
+        uint32_t cur = file[fileIdx];
+        for (int j = 0; j < MAX_DIGITS; j++) {
+            uint32_t st = bestDigitsSt[j];
             if (cur == 0) {
                 encode(mask[j], st);  //delimiter
                 break;
@@ -126,10 +124,10 @@ uint64_t getSum(uint32_t l, uint32_t r)
 
 
 //best code search finds the best digit sizes and best bases for digits
-void BCS(uint8_t dSt[24], uint32_t dN, uint64_t fullN,
+void BCS(uint8_t dSt[MAX_DIGITS], uint32_t dN, uint64_t fullN,
     uint64_t incN, double cLen, uint64_t fullSz)
 {
-    if (dN > 6) // all digits starting from 5th = 2
+    if (dN > 12 || fullN > maxCode)
     {
         if (fullN > maxCode)
         {
@@ -138,7 +136,7 @@ void BCS(uint8_t dSt[24], uint32_t dN, uint64_t fullN,
             if (fullSz < bestFullBitsSz)
             {
                 bestFullBitsSz = fullSz;
-                for (uint32_t i = 0; i < 24; i++)
+                for (uint32_t i = 0; i < MAX_DIGITS; i++)
                 {
                     bestDigitsSt[i] = dSt[i];
                 }
@@ -150,7 +148,7 @@ void BCS(uint8_t dSt[24], uint32_t dN, uint64_t fullN,
         uint64_t newSz = fullSz + (cLen + log2(3)) * getSum(fullN, fullN + incN - 1);
         BCS(dSt, dN + 1, fullN + incN, incN * 2, cLen + 2, newSz);
     }
-    else // lines 4-7 from Alg. 3 i the paper
+    else
         for(int i = minSt[dN]; i <= maxSt[dN]; i++) {
             dSt[dN] = i;
             uint64_t newSz = fullSz + (cLen + log2(i)) * getSum(fullN, fullN + incN - 1);
@@ -160,37 +158,37 @@ void BCS(uint8_t dSt[24], uint32_t dN, uint64_t fullN,
 
 //calculate prefix sums for BCS and masks of received from BCS digits
 void preCalc() {
-    for (int i = 0; i < fileSize; i++) {
+    for (uint32_t i = 0; i < fileSize; i++) {
         maxCode = max(maxCode, file[i]);
     }
-    for (int i = 0; i < fileSize; i++) {
+    PSum = (uint64_t*)calloc(maxCode+1, sizeof(uint64_t));
+    for (uint32_t i = 0; i < fileSize; i++) {
         PSum[file[i]]++;
-        cnt[file[i]]++;
     }
-    for (int i = 1; i <= maxCode; i++) {
+    for (uint32_t i = 1; i <= maxCode; i++) {
         PSum[i] += PSum[i-1];
     }
-    uint8_t digitSt[24];
-    memset(digitSt, 3, sizeof(uint8_t) * 24);
-    for (int i = 0; i < 24; i++) {
+    uint8_t digitSt[MAX_DIGITS];
+    memset(digitSt, 3, sizeof(uint8_t) * MAX_DIGITS);
+    for (uint32_t i = 0; i < MAX_DIGITS; i++) {
         bestDigitsSt[i] = 3;
     }
     BCS(digitSt, 0, 0, 1, 0, 0);
 
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < MAX_DIGITS; i++) {
         mask[i] = (uint32_t)bestDigitsSt[i]-1;
     }
 }
 
 
 uint32_t decodeIdx = 10;
-uint16_t bitPos = 0;
+uint32_t bitPos = 0;
 
 //gets next bit from the encoded bitstream
-uint16_t getBit() {
-    uint16_t bit = (encoded[decodeIdx] >> (15 - bitPos)) & 1;
+uint32_t getBit() {
+    uint32_t bit = (encoded[decodeIdx] >> (31 - bitPos)) & 1;
     bitPos++;
-    if (bitPos == 16) {
+    if (bitPos == 32) {
         bitPos = 0;
         decodeIdx++;
     }
@@ -199,10 +197,10 @@ uint16_t getBit() {
 };
 
 //decodes next (st)-ary digit in encoded bitstream
-uint16_t decode(uint16_t st) {
+uint32_t decode(uint32_t st) {
     int l = ceil(log2(st));
     int x = (1 << l) - st;
-    uint16_t f = 0;
+    uint32_t f = 0;
 
     for (int i = 0; i < l - 1; i++) {
         f <<= 1;
@@ -225,12 +223,12 @@ void decodeFile() {
     decodedSize = 0;
 
     while (decodeIdx <= encodedSize) {
-        uint16_t cur = 0;
+        uint32_t cur = 0;
         //decode next BCMix digit
-        for (int j = 0; j < 24; j++) {
-            uint16_t st = bestDigitsSt[j];
+        for (int j = 0; j < MAX_DIGITS; j++) {
+            uint32_t st = bestDigitsSt[j];
 
-            uint16_t f = decode(st);
+            uint32_t f = decode(st);
             //if (decodedSize < checkSize) cout << "val: " << val << endl;
 
             //end of number
@@ -268,12 +266,13 @@ void check() {
 
 int main() {
 
-    FILE* in = fopen("resources/data10", "rb");
+    FILE* in = fopen("resources/bible.txt.enc", "rb");
+    //FILE* in = fopen("resources/data04", "rb");
 
     fseek(in, 0, SEEK_END);
-    fileSize = ftell(in) / sizeof(uint16_t);
+    fileSize = ftell(in) / sizeof(uint32_t);
     fseek(in, 0, SEEK_SET);
-    fread(file, sizeof(uint16_t), fileSize, in);
+    fread(file, sizeof(uint32_t), fileSize, in);
 
     fclose(in);
 
@@ -282,7 +281,7 @@ int main() {
     cout << "PreCalc time : " << t0.elapsed() << endl;
 
     cout << "Digit base : ";
-    for (int i = 0; i < 24; i++) {
+    for (int i = 0; i < MAX_DIGITS; i++) {
         cout << (int)bestDigitsSt[i] << " ";
     }
 
@@ -296,7 +295,7 @@ int main() {
 
     pows[0] = 1;
     pref[0] = 0;
-    for (int i = 1; i < 24; i++) {
+    for (int i = 1; i < MAX_DIGITS; i++) {
         pows[i] = pows[i-1]*mask[i-1];
         pref[i] = pref[i-1]+pows[i-1];
     }
@@ -311,8 +310,8 @@ int main() {
 
     cout << "Encoded file: ";
     for (uint32_t i = 10; i < checkSize+10; i++) {
-        for (int j = 0; j < 16; j++) {
-            cout << ((encoded[i]&(1<<15-j))>>(15-j));
+        for (int j = 0; j < 32; j++) {
+            cout << ((encoded[i]&(1<<31-j))>>(31-j));
         }
     }
     cout << endl;
@@ -329,16 +328,37 @@ int main() {
     }
     cout << endl;
 
-    cout << "Input file size (bytes): " << fileSize*2 << "\n" << "Encoded file size (bytes): " << encodedSize*2-20 << endl;
+    cout << "Input file size (bytes): " << fileSize*4 << "\n" << "Encoded file size (bytes): " << encodedSize*4-20 << endl;
     cout << "BestEncodedSize (bytes): " << bestFullBitsSz/8 << endl;
 
-    cout << "Decoded file size (bytes) : " << decodedSize*2 << endl;
+    cout << "Decoded file size (bytes) : " << decodedSize*4 << endl;
     check();
 
     FILE* out = fopen("decoded", "wb");
-    fwrite(decoded, sizeof(uint16_t), decodedSize, out);
+    fwrite(decoded, sizeof(uint32_t), decodedSize, out);
 
     fclose(out);
 
     return 0;
 }
+
+//bible.txt:
+//884186 BC
+//875428 NBC
+//3064432
+
+//harry_potter1.txt:
+//98606 BC
+//97776 NBC
+//310396
+
+//shakespeare.txt
+//1224619 BC
+//1219672 NBC
+//3597084
+
+//sonnets.txt
+//22566 BC
+//22396 NBC
+//70944
+
