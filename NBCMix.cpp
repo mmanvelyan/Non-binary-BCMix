@@ -148,12 +148,13 @@ void BCS(uint8_t dSt[MAX_DIGITS], uint32_t dN, uint64_t fullN,
         uint64_t newSz = fullSz + (cLen + log2(3)) * getSum(fullN, fullN + incN - 1);
         BCS(dSt, dN + 1, fullN + incN, incN * 2, cLen + 2, newSz);
     }
-    else
+    else {
         for(int i = minSt[dN]; i <= maxSt[dN]; i++) {
             dSt[dN] = i;
             uint64_t newSz = fullSz + (cLen + log2(i)) * getSum(fullN, fullN + incN - 1);
             BCS(dSt, dN + 1, fullN + incN, incN * (i-1), cLen + log2(i), newSz);
         }
+    }
 }
 
 //calculate prefix sums for BCS and masks of received from BCS digits
@@ -248,6 +249,160 @@ void decodeFile() {
 
 }
 
+const uint8_t blockSz = 10;
+
+struct TableDecode
+{
+    uint32_t L[1 << blockSz];
+    uint8_t n[1 << blockSz];
+    uint8_t shift[1 << blockSz];
+};
+
+TableDecode ts[3];
+
+uint8_t shift = 0;
+uint8_t n = 0;
+uint32_t val = 0;
+uint32_t bitsBlock = 0;
+
+uint8_t getBitFromBlock() {
+    uint8_t res = ((bitsBlock >> (31 - bitsBlock)) & 1);
+    bitsBlock <<= 1;
+    return res;
+}
+
+uint32_t fastDecode(uint32_t st) {
+    int l = ceil(log2(st));
+    int x = (1 << l) - st;
+    uint32_t f = 0;
+
+    for (int i = 0; i < l - 1; i++) {
+        f <<= 1;
+        f += getBitFromBlock();
+        shift += 1;
+    }
+
+    if (f >= x) {
+        f <<= 1;
+        f += getBitFromBlock();
+        shift += 1;
+        f -= x;
+    }
+    //if (decodedSize < 10) cout << endl << "Decoded : " << f << endl;
+    return f;
+};
+
+uint8_t maxSize(uint8_t st) {
+    return ceil(log2(st));
+}
+
+void buildTables() {
+    uint8_t digitLen[3] = {0, 0, 0};
+    int j = 0, x = 0;
+    for (int i = 0; i < MAX_DIGITS; i++) {
+        if (x + maxSize(bestDigitsSt[i]) <= blockSz) {
+            digitLen[j]++;
+            x += maxSize(bestDigitsSt[i]);
+        } else {
+            j++;
+            x = maxSize(bestDigitsSt[i]);
+            if (j == 3) break;
+            digitLen[j] = 1;
+        }
+    }
+    for (int i = 0; i < (1 << blockSz); i++) {
+        shift = 0;
+        n = 0;
+        val = 0;
+        bitsBlock = i << (32-blockSz);
+        for (int j = 0; j < digitLen[0]; j++) {
+            uint32_t f = fastDecode(bestDigitsSt[j]);
+            if (f == mask[j]) {
+                n = 1;
+                val += pref[j];
+                break;
+            }
+            val += f*pows[j];
+        }
+        ts[0].n[i] = n;
+        ts[0].L[i] = val;
+        ts[0].shift[i] = shift;
+    }
+    for (int i = 0; i < (1 << blockSz); i++) {
+        shift = 0;
+        n = 0;
+        val = 0;
+        bitsBlock = i << (32-blockSz);
+        for (int j = digitLen[0]; j < digitLen[0]+digitLen[1]; j++) {
+            uint32_t f = fastDecode(bestDigitsSt[j]);
+            if (f == mask[j]) {
+                n = 1;
+                val += pref[j];
+                break;
+            }
+            val += f*pows[j];
+        }
+        ts[1].n[i] = n;
+        ts[1].L[i] = val;
+        ts[1].shift[i] = shift;
+    }
+    for (int i = 0; i < (1 << blockSz); i++) {
+        shift = 0;
+        n = 0;
+        val = 0;
+        bitsBlock = i << (32-blockSz);
+        for (int j = digitLen[0]+digitLen[1]; j < digitLen[0]+digitLen[1]+digitLen[2]; j++) {
+            uint32_t f = fastDecode(bestDigitsSt[j]);
+            if (f == mask[j]) {
+                n = 1;
+                val += pref[j];
+                break;
+            }
+            val += f*pows[j];
+        }
+        ts[2].n[i] = n;
+        ts[2].L[i] = val;
+        ts[2].shift[i] = shift;
+    }
+}
+
+uint32_t nextBlock(size_t bitOffset) {
+    size_t wordIndex = bitOffset / 32;
+    size_t bitInWord = bitOffset % 32;
+
+    uint64_t value = static_cast<uint64_t>(encoded[wordIndex]) << 32;
+
+    if (bitInWord + blockSz > 32) {
+        value |= encoded[wordIndex + 1];
+    }
+
+    uint64_t shifted = value << bitInWord;
+    uint32_t result = static_cast<uint32_t>(shifted >> (64 - blockSz));
+    return result;
+}
+
+void fastDecodeFile() {
+    decodedSize = 0;
+    size_t bitOffset = 10*32;
+    while (bitOffset/32 <= encodedSize) {
+        uint32_t cur = 0;
+
+        for (int j = 0; j < 3; j++) {
+            uint32_t block = nextBlock(bitOffset);
+            cur += ts[j].L[block];
+            bitOffset += ts[j].shift[block];
+            if (ts[j].n[block] == 1) {
+                break;
+            }
+        }
+        //if (decodedSize < checkSize) cout << endl << "Decoded : " << cur << endl;
+        decoded[decodedSize++] = cur;
+    }
+}
+
+
+
+
 void check() {
     cout << "Checking..." << endl;
     bool diff = false;
@@ -266,7 +421,7 @@ void check() {
 
 int main() {
 
-    FILE* in = fopen("resources/bible.txt.enc", "rb");
+    FILE* in = fopen("resources/sonnets.txt.enc", "rb");
     //FILE* in = fopen("resources/data04", "rb");
 
     fseek(in, 0, SEEK_END);
@@ -316,12 +471,23 @@ int main() {
     }
     cout << endl;
 
-    Timer t2;
+    Timer t5;
 
     decodeFile();
 
-    cout << "Decode time: " << t2.elapsed() << endl;
+    cout << "Decode time: " << t5.elapsed() << endl;
 
+    buildTables();
+
+    double time = 0;
+    for (int i = 0; i < 10; i++) {
+        Timer t2;
+
+        fastDecodeFile();
+
+        time += t2.elapsed();
+    }
+    cout << "Fast decode time: " << time/10 << endl;
     cout << "Decoded file: ";
     for (uint32_t i = 0; i < checkSize; i++) {
         cout << decoded[i] << " ";
@@ -336,8 +502,8 @@ int main() {
 
     FILE* out = fopen("decoded", "wb");
     fwrite(decoded, sizeof(uint32_t), decodedSize, out);
-
     fclose(out);
+
 
     return 0;
 }
